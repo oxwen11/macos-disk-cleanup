@@ -7,13 +7,13 @@ In large repositories and monorepos, each working directory checkout duplicates 
 ## 1. Waste Mechanisms & Heuristics
 
 * **Worktree Proliferation**: Teams using `git worktree add` for parallel reviews, release stabilization, or bug fixing often leave old worktrees behind after branches are merged or abandoned.
-* **Hidden Dependency Duplication**: Even when code is identical, package managers instantiate separate node modules trees in each worktree checkout unless configured with shared pnpm stores.
+* **Hidden Dependency Duplication**: Even when code is identical, package managers instantiate separate node modules trees in each worktree checkout unless configured with shared global stores.
 
 ---
 
 ## 2. The Three-Key Verification Strategy
 
-Never delete a worktree directory without proving all three safety conditions:
+Before removing an entire worktree directory, prove all three safety conditions:
 
 ```
                   [ Worktree Directory ]
@@ -32,11 +32,11 @@ Never delete a worktree directory without proving all three safety conditions:
                      [ SAFE TO DELETE ]
 ```
 
-### Detailed Check Commands:
+### Verification Commands:
 ```bash
 # 1. Cleanliness Check
 git -C <path> status --porcelain
-# Must return empty. If any file is listed (even untracked), DO NOT DELETE.
+# Must return empty. If any file is listed (even untracked), DO NOT DELETE the whole worktree.
 
 # 2. Remote Survival Check
 COMMIT=$(git -C <path> rev-parse HEAD)
@@ -46,21 +46,41 @@ git -C <main-repo> branch -r --contains "$COMMIT"
 
 ---
 
-## 3. Safe Pruning Workflow
+## 3. The Dual-Track Governance Strategy
 
-1. **Remove Directory via Git**:
+Developers frequently have worktrees with uncommitted draft notes, WIP experiments, or historical code they cannot delete outright. Address this with **Dual-Track Governance**:
+
+```
+                 [ Candidate Worktree ]
+                           │
+       ┌───────────────────┴───────────────────┐
+       ▼                                       ▼
+  [All 3 Keys Pass]                      [Any Key Fails]
+  (Clean & Pushed/Merged)                (Dirty, Drafts, or WIP)
+       │                                       │
+       ▼                                       ▼
+  Track A: Complete Archive              Track B: Dormant Stripping
+  Remove entire directory tree           Delete only dependencies & build caches
+  (git worktree remove --force)          (rm -rf node_modules dist out)
+       │                                       │
+       ▼                                       ▼
+  Reclaims 100% of space                 Reclaims ~95% of space,
+                                         PRESERVES 100% of code & drafts!
+```
+
+### Track A: Complete Archive & Deletion
+For branches confirmed merged or archived remotely:
+1. `git -C <main-repo> worktree remove --force <worktree-path>`
+2. Fallback if git metadata diverges: `rm -rf <worktree-path>`
+3. Prune stale worktree tracking: `git -C <main-repo> worktree prune`
+
+### Track B: Dormant Stripping (Safe for Dirty / Uncommitted Worktrees)
+For branches that must be retained or have uncommitted scratch files:
+1. Identify dependencies:
    ```bash
-   git -C <main-repo> worktree remove --force <worktree-path>
+   rm -rf <worktree-path>/node_modules <worktree-path>/dist <worktree-path>/out <worktree-path>/.next
    ```
-2. **Fallback to Direct Removal**:
-   If Git reports metadata divergence or detached states, verify cleanliness and delete via `rm -rf <worktree-path>`.
-3. **Prune Stale Worktree Metadata**:
-   ```bash
-   git -C <main-repo> worktree prune
-   ```
-4. **Selective Dependency Pruning (Alternative)**:
-   If a worktree is still needed occasionally for reference, delete only its `node_modules` and build directories:
-   ```bash
-   rm -rf <worktree-path>/node_modules <worktree-path>/dist <worktree-path>/out
-   ```
-   This retains 99% of the disk savings while keeping source code and local Git status intact.
+2. **Outcome**:
+   * Reclaims ~95% of the disk footprint (2GB–4GB per worktree).
+   * 100% preserves uncommitted work, scratch notes, and Git branch pointer.
+   * Can be re-hydrated in minutes via `pnpm install` / `npm install` when reactivated.

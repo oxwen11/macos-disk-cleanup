@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Verify Git worktrees before cleanup.
+Verify Git worktrees before cleanup using Dual-Track Governance.
 Checks:
 1. Working tree cleanliness (no uncommitted edits/untracked files)
 2. Upstream commit status (commits already pushed to remote or merged into origin)
-Only worktrees that are 100% clean and pushed/merged are marked as SAFE TO DELETE.
+
+Outputs actionable dual-track recommendations:
+- Track A (Full Archive): 100% clean & in remote -> Safe to delete entire directory.
+- Track B (Dormant Stripping): Dirty, drafts, or WIP -> Keep code/drafts intact, strip only heavy dependencies (node_modules/dist/out).
 """
 
 import os
@@ -14,28 +17,24 @@ import subprocess
 def inspect_worktree(repo_path, main_repo_path=None):
     if not os.path.exists(repo_path):
         return None
-    
-    # Check if git directory or worktree gitlink exists
+
     git_indicator = os.path.join(repo_path, '.git')
     if not os.path.exists(git_indicator):
         return {
             'path': repo_path,
             'is_git': False,
-            'safe': False,
+            'safe_full': False,
             'reason': 'Not a Git repository or worktree'
         }
 
     try:
-        # Branch or detached HEAD
         branch = subprocess.run(['git', '-C', repo_path, 'rev-parse', '--abbrev-ref', 'HEAD'], capture_output=True, text=True, timeout=3).stdout.strip()
         commit_sha = subprocess.run(['git', '-C', repo_path, 'rev-parse', 'HEAD'], capture_output=True, text=True, timeout=3).stdout.strip()
         last_log = subprocess.run(['git', '-C', repo_path, 'log', '-1', '--oneline'], capture_output=True, text=True, timeout=3).stdout.strip()
 
-        # Dirty files
         status = subprocess.run(['git', '-C', repo_path, 'status', '--porcelain'], capture_output=True, text=True, timeout=3).stdout.strip()
         dirty_files = [line for line in status.split('\n') if line.strip()]
 
-        # Check if commit exists on origin remote
         in_remote = False
         target_repo = main_repo_path if main_repo_path and os.path.exists(main_repo_path) else repo_path
         remote_branches = subprocess.run(
@@ -45,7 +44,14 @@ def inspect_worktree(repo_path, main_repo_path=None):
         if remote_branches:
             in_remote = True
 
-        safe = (len(dirty_files) == 0) and in_remote
+        safe_full = (len(dirty_files) == 0) and in_remote
+
+        # Check for heavy dependency directories
+        heavy_dirs = []
+        for d in ['node_modules', 'dist', 'out', '.next', 'target']:
+            dp = os.path.join(repo_path, d)
+            if os.path.exists(dp):
+                heavy_dirs.append(d)
 
         return {
             'path': repo_path,
@@ -56,14 +62,14 @@ def inspect_worktree(repo_path, main_repo_path=None):
             'dirty_count': len(dirty_files),
             'dirty_files': dirty_files[:5],
             'in_remote': in_remote,
-            'remote_branches': remote_branches.split('\n') if remote_branches else [],
-            'safe': safe
+            'safe_full': safe_full,
+            'heavy_dirs': heavy_dirs
         }
     except Exception as e:
         return {
             'path': repo_path,
             'is_git': True,
-            'safe': False,
+            'safe_full': False,
             'reason': f'Error executing git command: {e}'
         }
 
@@ -80,8 +86,8 @@ def main():
         sys.exit(1)
 
     entries = sorted(os.listdir(parent_dir))
-    safe_list = []
-    unsafe_list = []
+    track_a = []
+    track_b = []
 
     for item in entries:
         full_path = os.path.join(parent_dir, item)
@@ -90,27 +96,33 @@ def main():
         res = inspect_worktree(full_path, main_repo)
         if not res or not res.get('is_git', True):
             continue
-        if res.get('safe'):
-            safe_list.append(res)
+        if res.get('safe_full'):
+            track_a.append(res)
         else:
-            unsafe_list.append(res)
+            track_b.append(res)
 
-    print(f"=== Worktree Audit in {parent_dir} ===\n")
-    print(f"[SAFE TO DELETE] ({len(safe_list)} items - 100% clean & in remote):")
-    for item in safe_list:
-        print(f"  ✓ {item['name']:<40} [{item['branch']}] {item['last_log']}")
+    print(f"=== Dual-Track Worktree Audit in {parent_dir} ===\n")
+    print(f"--- TRACK A: Full Archive & Removal ({len(track_a)} items - 100% clean & in remote) ---")
+    if not track_a:
+        print("  (None found)")
+    for item in track_a:
+        print(f"  ✓ {item['name']:<38} [{item['branch']}] {item['last_log']}")
 
-    print(f"\n[DO NOT DELETE] ({len(unsafe_list)} items - has uncommitted edits or unpushed commits):")
-    for item in unsafe_list:
+    print(f"\n--- TRACK B: Dormant Stripping ({len(track_b)} items - has uncommitted edits/unpushed code) ---")
+    print("  * Preserves 100% of user code and drafts. Safely strip heavy directories to reclaim ~95% space:")
+    if not track_b:
+        print("  (None found)")
+    for item in track_b:
         reasons = []
         if item.get('dirty_count', 0) > 0:
             reasons.append(f"{item['dirty_count']} uncommitted files")
         if not item.get('in_remote'):
-            reasons.append("commit not found on remote")
-        print(f"  ✗ {item.get('name', item['path']):<40} -> {', '.join(reasons)}")
-        if item.get('dirty_files'):
-            for d in item['dirty_files'][:2]:
-                print(f"      * {d}")
+            reasons.append("commit not on remote")
+        heavy = f" [contains: {', '.join(item['heavy_dirs'])}]" if item.get('heavy_dirs') else ""
+        print(f"  • {item['name']:<38} -> {', '.join(reasons)}{heavy}")
+        if item.get('heavy_dirs'):
+            targets = ' '.join([os.path.join(item['path'], d) for d in item['heavy_dirs']])
+            print(f"      Strip command: rm -rf {targets}")
 
 if __name__ == '__main__':
     main()

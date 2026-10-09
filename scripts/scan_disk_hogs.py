@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Fast, parallel, timeout-safe disk usage inspector for macOS development machines.
-Safely scans top-level developer caches, AI IDE stores, container virtual disks,
-and package managers without hanging on deep file trees.
+Scans high-density planes without hanging, and checks APFS snapshots and container runtimes.
 """
 
 import os
@@ -40,7 +39,6 @@ KNOWN_DEVELOPER_TARGETS = [
 
 def get_dynamic_targets():
     targets = list(KNOWN_DEVELOPER_TARGETS)
-    # Check for container group containers dynamically without hardcoded IDs
     gc_path = os.path.expanduser('~/Library/Group Containers')
     if os.path.exists(gc_path):
         for pattern in ['*orbstack*', '*docker*']:
@@ -68,14 +66,23 @@ def check_path_size(path_str, timeout_sec=5):
 
 def main():
     print("=== macOS Developer Disk Usage Scan ===")
-    
+
     # 1. Overall volume usage
     res = subprocess.run(['df', '-h', '/'], capture_output=True, text=True)
     for line in res.stdout.strip().split('\n'):
         print(line)
     print()
 
-    # 2. Parallel scan of known high-yield targets
+    # 2. Check APFS local snapshots
+    try:
+        snap_res = subprocess.run(['tmutil', 'listlocalsnapshots', '/'], capture_output=True, text=True, timeout=3)
+        snapshots = [s for s in snap_res.stdout.strip().split('\n') if s.strip() and not s.startswith('Snapshots for')]
+        if snapshots:
+            print(f"  [!] Found {len(snapshots)} APFS Time Machine local snapshot(s) holding deleted blocks.")
+    except Exception:
+        pass
+
+    # 3. Parallel scan of candidate targets
     all_targets = get_dynamic_targets()
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
         results = list(executor.map(check_path_size, all_targets))
@@ -86,7 +93,7 @@ def main():
     print("--- High-Yield Candidates (>500MB or Timeout) ---")
     for kb, p in valid:
         if kb == -1:
-            print(f"  [TIMEOUT] {p} (Directory too large for quick scan, inspect subdirs)")
+            print(f"  [TIMEOUT] {p} (High file density: inspect subdirectories)")
         elif kb > 500 * 1024:
             print(f"  {kb / 1024 / 1024:6.2f} GB : {p}")
 

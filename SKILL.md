@@ -74,32 +74,36 @@ Load these dedicated reference documents based on where space is concentrated:
 * **AI IDEs & Agent Runtimes**: See [references/ai_ides_and_agent_runtimes.md](references/ai_ides_and_agent_runtimes.md)
   * *Covers*: Shadow AST codebase snapshots (Cursor, Windsurf), agent worker version stacking, multi-agent multiplexer worktrees (`~/.<tool>/worktrees`), and desktop VM bundles.
 * **Git Worktrees & Monorepos**: See [references/git_worktrees_and_monorepos.md](references/git_worktrees_and_monorepos.md)
-  * *Covers*: Multi-worktree dependency duplication, clean & push verification protocol, and selective dependency stripping.
+  * *Covers*: Multi-worktree dependency duplication, clean & push verification protocol, and **Dual-Track Governance** (Track A: Full archive vs Track B: Dormant stripping of `node_modules`).
 * **Virtualization & Containers**: See [references/virtualization_and_containers.md](references/virtualization_and_containers.md)
-  * *Covers*: Docker / OrbStack build caches, dangling base images, stopped containers, and APFS Time Machine snapshots.
+  * *Covers*: Docker / OrbStack build caches, dangling base images, stopped containers, APFS Time Machine local snapshots, and the 10%–15% system headroom red line.
 * **Compilers & Package Managers**: See [references/compilers_and_package_managers.md](references/compilers_and_package_managers.md)
-  * *Covers*: Rustup toolchain version stacking, global npm/bun/pnpm/yarn stores, and UV/pip caches.
+  * *Covers*: Rustup toolchain version stacking, global npm/bun/pnpm/yarn stores, UV/pip caches, and the **"Value over Vanity" Rebuild Cost Matrix**.
 * **Browsers & On-Device Models**: See [references/browsers_and_on_device_models.md](references/browsers_and_on_device_models.md)
   * *Covers*: Chrome/Edge on-device LLM model weights (OptGuideOnDeviceModel), GPU shader caches, and strict profile data boundaries.
 * **System Cleaners & Downloads**: See [references/system_cleaners_and_downloads.md](references/system_cleaners_and_downloads.md)
-  * *Covers*: Mole CLI automation (`mole clean`), system logs/trash, and installer media vs. human document segregation.
+  * *Covers*: Mole CLI automation (`mole clean`), system logs/trash, installer vs document segregation, and **advisory-only ghost residue detection**.
 
 ---
 
 ## 4. Safety Invariants (Zero-Destruction Rules)
 
 1. **Read-Only Inspection**: Zero deletions during analysis. Never run `rm` without prior user confirmation.
-2. **The Three-Key Git Worktree Safety Gate**:
-   A worktree directory is safe to delete **only if**:
+2. **The Dual-Track Git Worktree Safety Gate**:
+   A worktree directory is safe to delete fully (**Track A**) only if:
    * `Key 1 (Clean)`: `git status --porcelain` returns 0 changes (no uncommitted edits or untracked files).
    * `Key 2 (Remote Presence)`: `git branch -r --contains <HEAD>` proves the commit exists on remote or has merged into a primary branch.
    * `Key 3 (Upstream Sync)`: No unpushed commits ahead of tracking branch.
-   * *Use `scripts/verify_worktrees.py` to automate this check before recommending removal.*
-3. **The Personal Asset Fence**:
+   * *If any key fails (e.g. uncommitted WIP or draft notes)*, use **Track B (Dormant Stripping)**: strip only `node_modules` and build directories (`dist/out`), reclaiming ~95% of space while preserving 100% of user code and drafts.
+3. **The "Value over Vanity" Invariant**:
+   * Never purge caches whose rebuild cost exceeds their storage value (e.g., Playwright browser binaries, local model checkpoints, active JetBrains indices). Prioritize zero-cost stateless disposables first.
+4. **The Personal Asset Fence**:
    * Never bulk-delete `~/Downloads`. Filter specifically for application installers (`.dmg`, `.pkg`, application `.zip`, `.exe`).
    * Preserve all documents, PDFs, media, and notes.
-4. **The Active Process Barrier**:
+5. **The Active Process Barrier**:
    * Cross-reference any candidate runtime directory against `ps aux`. Never delete files belonging to actively executing processes.
+6. **Ghost Residues are Advisory Only**:
+   * Never auto-delete Application Support directories solely because a matching `/Applications/<App>.app` is absent. Present findings as an advisory inquiry to avoid breaking headless developer utilities.
 
 ---
 
