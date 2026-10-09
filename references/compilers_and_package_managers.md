@@ -12,7 +12,8 @@ Never clean caches solely to report an artificially inflated gigabyte number. A 
 | :--- | :--- | :--- | :--- | :--- |
 | 🟢 **Safe / High-Yield** | Obsolete Toolchains | Older `rustup` versions (e.g. legacy 1.90/1.92 when stable is 1.95+) | Zero | **Uninstall immediately** via toolchain manager |
 | 🟢 **Safe / High-Yield** | Download Tarballs | `~/.npm/_cacache`, `~/.cache/pip`, `yarn cache` | Low (Auto-re-downloaded on demand) | **Clean routinely** |
-| 🟢 **Safe / High-Yield** | Dead Project Artifacts | `out/`, `dist/`, `.turbo/`, `target/debug` of inactive repos | Fast | **Prune safely** |
+| 🟢 **Safe / High-Yield** | Rust Build Targets | `target/debug`, `target/release` in dormant projects | Moderate (Recompiled on demand) | **Run `cargo clean` or strip `target/`** |
+| 🟢 **Safe / High-Yield** | Dead Project Artifacts | `out/`, `dist/`, `.turbo/`, `.next/` of inactive repos | Fast | **Prune safely** |
 | 🟡 **Trade-off / Caution** | Test Browsers | Playwright/Puppeteer browser binaries (`ms-playwright`) | **High** (~1GB download, blocks CI/tests) | **Do not purge** unless test suites are no longer used locally |
 | 🟡 **Trade-off / Caution** | Local Model Caches | HuggingFace (`~/.cache/huggingface`), ModelScope | **Very High** (Multi-GB downloads) | **Confirm with user** before touching any model cache |
 | 🟡 **Trade-off / Caution** | Active IDE Indexes | JetBrains `caches/`, active workspace AST stores | **High** (Causes prolonged 100% CPU re-indexing) | **Preserve** unless corrupted |

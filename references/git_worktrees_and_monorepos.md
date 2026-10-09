@@ -61,7 +61,7 @@ Developers frequently have worktrees with uncommitted draft notes, WIP experimen
        ▼                                       ▼
   Track A: Complete Archive              Track B: Dormant Stripping
   Remove entire directory tree           Delete only dependencies & build caches
-  (git worktree remove --force)          (rm -rf node_modules dist out)
+  (git worktree remove --force)          (rm -rf node_modules, target/, dist/, out/)
        │                                       │
        ▼                                       ▼
   Reclaims 100% of space                 Reclaims ~95% of space,
@@ -75,12 +75,29 @@ For branches confirmed merged or archived remotely:
 3. Prune stale worktree tracking: `git -C <main-repo> worktree prune`
 
 ### Track B: Dormant Stripping (Safe for Dirty / Uncommitted Worktrees)
-For branches that must be retained or have uncommitted scratch files:
-1. Identify dependencies:
-   ```bash
-   rm -rf <worktree-path>/node_modules <worktree-path>/dist <worktree-path>/out <worktree-path>/.next
-   ```
-2. **Outcome**:
+For branches that must be retained or have uncommitted scratch files across multiple ecosystems:
+1. **Frontend / Node**: `rm -rf <path>/node_modules <path>/dist <path>/out <path>/.next <path>/.turbo`
+2. **Rust / Cargo**: `rm -rf <path>/target` (or `cargo clean`)
+3. **Python**: `rm -rf <path>/.venv <path>/__pycache__`
+4. **Outcome**:
    * Reclaims ~95% of the disk footprint (2GB–4GB per worktree).
-   * 100% preserves uncommitted work, scratch notes, and Git branch pointer.
-   * Can be re-hydrated in minutes via `pnpm install` / `npm install` when reactivated.
+   * 100% preserves uncommitted work, scratch notes, and Git branch pointers.
+   * Can be re-hydrated in minutes on demand.
+
+---
+
+## 4. Operational Invariant: The APFS Inode Deletion Trap
+
+When deleting deep directories like `node_modules` (often containing 150,000+ files and symlinks), macOS APFS performs synchronous journaling and extended attribute checks.
+* **The Pitfall**: A single synchronous `rm -rf` can take 20–50+ seconds, causing tool timeouts in agent harnesses.
+* **Remediation**:
+  * Execute large directory removals concurrently across candidate folders.
+  * When executing from an agent shell, do not panic on a 30s timeout; verify remaining item counts or allow background completion rather than assuming an error.
+
+---
+
+## 5. Sibling Worktree Discovery Heuristic
+
+Do not only inspect subdirectories of standard project paths. Multi-agent tools and developers frequently instantiate worktree clusters as sibling directories under home (e.g. `~/*-worktrees/`).
+* **Detection Heuristic**: Check whether `~/<folder>/*` contains a `.git` file with `gitdir:` pointers rather than a standard `.git/` directory.
+

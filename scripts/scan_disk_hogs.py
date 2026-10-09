@@ -44,6 +44,13 @@ def get_dynamic_targets():
         for pattern in ['*orbstack*', '*docker*']:
             for match in glob.glob(os.path.join(gc_path, pattern)):
                 targets.append(match)
+
+    # Detect sibling worktree clusters in home directory (~/*-worktrees)
+    home_dir = os.path.expanduser('~')
+    for match in glob.glob(os.path.join(home_dir, '*-worktrees')):
+        if os.path.isdir(match):
+            targets.append(match)
+
     return targets
 
 def check_path_size(path_str, timeout_sec=5):

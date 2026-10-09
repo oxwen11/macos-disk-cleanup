@@ -35,6 +35,17 @@ Always display the exact installer table before deleting so the user can retain 
 
 ---
 
+## 3. The Root-Owned Trash Pitfall (`~/.Trash`)
+
+When emptying Trash via CLI (`rm -rf ~/.Trash/*`), operations may fail with `Permission denied`.
+* **The Root Cause**: Applications or packages originally installed via PKG installers or system helpers (e.g. Remote Desktop, hypervisors) often retain files owned by `root:wheel` when moved to Trash.
+* **The Protocol**:
+  * Clean user-owned trash items via standard CLI commands.
+  * For remaining root-owned application bundles, **do not prompt for risky `sudo rm`**.
+  * Instruct the user to perform standard macOS Finder "Empty Trash" (which triggers native macOS Touch ID / admin password elevation securely).
+
+---
+
 ## 3. Orphaned App Residue (Ghost Residue) Detection — Advisory Only
 
 When macOS applications are deleted via drag-to-trash, data in `~/Library/Application Support` and `~/Library/Caches` frequently remains orphaned.
