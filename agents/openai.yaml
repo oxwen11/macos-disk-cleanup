@@ -1,0 +1,6 @@
+interface:
+  display_name: "macOS Disk Cleanup"
+  short_description: "Audit and safely reclaim storage on macOS developer machines."
+  default_prompt: "Run $macos-disk-cleanup to inspect disk usage and prepare a safe cleanup plan."
+policy:
+  allow_implicit_invocation: false
